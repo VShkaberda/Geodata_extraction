@@ -40,11 +40,16 @@ def city_is_validated(data):
         return True
     return False
 
+
 def clean_addr(s):
     try:
         return s.split(' ', 1)[1]
     except IndexError:
         return s
+
+
+def geosort(x):
+    return (0 if x['class']=='building' else 1, -x['importance'])
 
 
 def return_coo(data, housenumber):
@@ -58,15 +63,13 @@ def return_coo(data, housenumber):
            f'city={city}&'
            f'postalcode={postalcode}&'
            f'format=json&'
-           f'limit=3'
+           f'limit=1'
            )
-    print(url)
     response = requests.get(url, timeout=5)
     assert response.status_code == 200, 'Response status is {}'.format(response.status_code)
     resp_data = response.json()
-    print(resp_data)
-    print(response.text)
-    return 1
+    #resp_data.sort(key=geosort)
+    return (resp_data[0]['lat'], resp_data[0]['lon'])
 
 
 def main():
@@ -76,15 +79,21 @@ def main():
             # City == data[2]
 #            if not city_is_validated(data[2]):
 #                continue
-            a_id.write(';'.join([address_id] + data[:5] + ['\n']))
+            a_id.write(';'.join([str(address_id)] + data[:5] + ['\n']))
             for housenumber in data[-2].split(','):
-                coo = return_coo(data, housenumber)
-                f.write('{};{};{}\n'.format(address_id, *coo))
+                try:
+                    coo = return_coo(data, housenumber)
+                    f.write('{};{};{};{}\n'.format(address_id, housenumber, *coo))
+                # if no result was in response
+                except IndexError:
+                    pass
             address_id += 1
+            if address_id % 100 == 0:
+                print('Done ', address_id)
 
 
 if __name__ == '__main__':
-    start_time = time()
+    start_time = time.time()
     main()
-    print("Done in {:.3f} sec".format(time() - start_time))
+    print("Done in {:.3f} sec".format(time.time() - start_time))
     print("End.")
