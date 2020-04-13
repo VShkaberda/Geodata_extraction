@@ -5,6 +5,9 @@ Created on Mon Apr 13 20:14:10 2020
 @author: v.shkaberda
 """
 import csv
+import time
+import requests
+
 
 with open('cities.csv', 'r') as ref:
     CITY_REFERENCE = set(ref.read().split('\n'))
@@ -18,10 +21,12 @@ def from_csv():
             yield row
 
 
-def read_csv():
+def read_csv(csv_fname=None):
     """ Row generator.
     """
-    with open('houses.csv', 'r') as csvfile:
+    if csv_fname is None:
+        csv_fname = 'houses.csv'
+    with open(csv_fname, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=';')
         next(reader, None)
         for row in reader:
@@ -35,27 +40,51 @@ def city_is_validated(data):
         return True
     return False
 
+def clean_addr(s):
+    try:
+        return s.split(' ', 1)[1]
+    except IndexError:
+        return s
 
-def return_coo(data):
+
+def return_coo(data, housenumber):
     """ Query NominatimAPI ad return latitude and longitude.
     """
+    obl, rayon, city, postalcode, street, *_ = data
+    street = clean_addr(street)
+    city = clean_addr(city)
+    url = (f'https://osm.fozzy.ua/search?'
+           f'street={housenumber} {street}&'
+           f'city={city}&'
+           f'postalcode={postalcode}&'
+           f'format=json&'
+           f'limit=3'
+           )
+    print(url)
+    response = requests.get(url, timeout=5)
+    assert response.status_code == 200, 'Response status is {}'.format(response.status_code)
+    resp_data = response.json()
+    print(resp_data)
+    print(response.text)
     return 1
 
 
 def main():
     address_id = 1
     with open('data.csv', 'a') as f, open('address_id.csv', 'a') as a_id:
-        for data in read_csv():
+        for data in read_csv('houses2.csv'):
             # City == data[2]
-            if not city_is_validated(data[2]):
-                continue
+#            if not city_is_validated(data[2]):
+#                continue
             a_id.write(';'.join([address_id] + data[:5] + ['\n']))
-            for house in data[-2].split(','):
-                coo = return_coo(house)
+            for housenumber in data[-2].split(','):
+                coo = return_coo(data, housenumber)
                 f.write('{};{};{}\n'.format(address_id, *coo))
             address_id += 1
 
 
 if __name__ == '__main__':
+    start_time = time()
     main()
+    print("Done in {:.3f} sec".format(time() - start_time))
     print("End.")
