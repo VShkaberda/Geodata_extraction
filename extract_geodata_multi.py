@@ -9,7 +9,15 @@ import time
 import threading
 import requests
 
+from contextlib import suppress
 from queue import Queue
+
+REPLACEMENT = {'пл.': 'площа',
+               'пров.': 'провулок',
+               'вул.': 'вулиця',
+               'бульв.': 'бульвар',
+               'кв-л': 'квартал'
+               }
 
 
 def read_csv(csv_fname=None):
@@ -32,6 +40,18 @@ def clean_addr(s):
     except IndexError:
         return s
 
+def fix_street_name(sname):
+    """ Convert short type names according to REPLACEMENT dictionary and return
+    street name with type at the end.
+    """
+    with suppress(KeyError):
+        try:
+            sname = sname.split(' ', 1)
+        except IndexError:
+            return sname
+        sname[0] = REPLACEMENT[sname[0]]
+        return ' '.join(reversed(sname))
+
 
 def geosort(x):
     """ Key function to sort results from response.
@@ -43,8 +63,9 @@ def return_coo(data, housenumber):
     """ Query NominatimAPI ad return latitude and longitude.
     """
     obl, rayon, city, postalcode, street, *_ = data
-    street = clean_addr(street)
+    street = fix_street_name(street)
     city = clean_addr(city)
+    # first attempt with strict query
     url = (f'https://osm.fozzy.ua/search?'
            f'street={housenumber} {street}&'
            f'city={city}&'
@@ -53,8 +74,9 @@ def return_coo(data, housenumber):
            f'limit=1'
            )
     response = requests.get(url, timeout=10)
-    assert response.status_code == 200, 'Response status is {}'.format(response.status_code)
+    #assert response.status_code == 200, 'Response status is {}'.format(response.status_code)
     resp_data = response.json()
+    print(response.text)
     #resp_data.sort(key=geosort)
     return (resp_data[0]['lat'], resp_data[0]['lon'])
 
@@ -96,7 +118,7 @@ def main():
     queue = Queue()
 
     # start threads
-    for i in range(5):
+    for i in range(8):
         t = Downloader(i+1, queue)
         t.setDaemon(True)
         t.start()
